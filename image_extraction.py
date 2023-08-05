@@ -1,4 +1,5 @@
 import sys
+sys.path.insert(0, "./yolov7")
 import argparse
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def hook_fn(m, i, o):
 def get_image(path: str=None):
     if path is None:
         path = Path("sample_image.jpg").as_posix()
-    if not Path.exists(path):
+    if not Path.exists(Path(path)):
         raise FileNotFoundError("Can't find image file")
     im = cv2.imread(path)
     img = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
@@ -78,7 +79,7 @@ def convert(img, target_type_min, target_type_max, target_type):
     new_img = (a * img + b).astype(target_type)
     return new_img
 
-def extract(output_dir: str= "Results"):
+def extract(output_dir: str= "Results", limit: int=999):
     path = Path(".") / output_dir
     if not path.is_dir():
         path.mkdir(parents=True, exist_ok=True)
@@ -91,7 +92,7 @@ def extract(output_dir: str= "Results"):
         # Log the process
         print(f"layer: {i}/{range_i}")
         if torch.is_tensor(visualisation[list(visualisation.keys())[i]]):
-            for j in range(list(visualisation[list(visualisation.keys())[i]].shape)[1]):
+            for j in range(min(list(visualisation[list(visualisation.keys())[i]].shape)[1], limit)):
                 im = convert(np.float32(visualisation[list(visualisation.keys())[i]][0,j,:,:].cpu().detach().numpy()), 0 , 255, np.uint8)
                 cv2.imwrite(Path(path / str("img" + str(j) + ".png")).as_posix(), im)
     print("Extraction completed!")
@@ -129,9 +130,11 @@ if __name__ == "__main__":
     )
     parser.add_argument('-gpu' , action='store_true', default=False, help="enable gpu")
     args = parser.parse_args()
+    if not args.gpu:
+        raise EnvironmentError("GPU must be enabled, since some functions of yolo is not work with cpu")
     visualisation = {} # To store tensors, must be the same with variable inside hook_fn
-    model = load_model(path = args.p, gpu = args.gpu)
-    img = get_image(path = args.i)
+    model = load_model(path = args.model_path, gpu = args.gpu)
+    img = get_image(path = args.image_dir)
     model, _ = pre_process_model(model)
     _  = process(img, model, gpu = args.gpu)
-    extract(output_dir= args.o)
+    extract(output_dir= args.output_dir, limit=args.limit)
